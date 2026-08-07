@@ -480,7 +480,7 @@
                 dot.classList.remove('active');
             });
             
-            announce('已停止');
+            announce('已停止', true);
         }
 
         // 更新 BPM
@@ -523,7 +523,7 @@
                 
                 if (newBpm >= 40 && newBpm <= 208) {
                     updateBPM(newBpm);
-                    announce(`${bpm} BPM`);
+                    announce(`${bpm} BPM`, true);
                 }
             }
             
@@ -542,19 +542,30 @@
         }
 
         // 語音回饋（視障友善：獨立於語音辨識）
-        function announce(text) {
-            if (audioFeedbackEnabled || isListening) {
-                speak(text);
+        let announceTimer = null;
+        function announce(text, immediate = false) {
+            if (!audioFeedbackEnabled && !isListening) return;
+
+            // 防堆疊：清除上一個 pending 報讀
+            if (announceTimer) {
+                clearTimeout(announceTimer);
             }
+
+            // 防重複：拖滑桿時 debounce 200ms，只報最後一次
+            announceTimer = setTimeout(() => {
+                speak(text, 0.5); // 輕聲量
+            }, immediate ? 0 : 200);
         }
 
         // 語音合成
-        function speak(text) {
+        function speak(text, volume = 0.8) {
             if ('speechSynthesis' in window) {
+                // 先中斷舊報讀，避免堆疊重複
+                speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'zh-TW';
-                utterance.rate = 1.2;
-                utterance.volume = 0.8;
+                utterance.rate = 1.3;
+                utterance.volume = volume;
                 speechSynthesis.speak(utterance);
             }
         }
@@ -644,19 +655,19 @@
             
             if (cmd.includes('加快') || cmd.includes('變快') || cmd.includes('加速') || cmd.includes('快一點')) {
                 updateBPM(bpm + 10);
-                announce(`${bpm} BPM`);
+                announce(`${bpm} BPM`, true);
                 return;
             }
             
             if (cmd.includes('變慢') || cmd.includes('減慢') || cmd.includes('降速') || cmd.includes('慢一點')) {
                 updateBPM(bpm - 10);
-                announce(`${bpm} BPM`);
+                announce(`${bpm} BPM`, true);
                 return;
             }
             
             if (cmd.includes('重置') || cmd.includes('重設') || cmd.includes('恢復') || cmd.includes('預設')) {
                 updateBPM(120);
-                announce('已重置為 120 BPM');
+                announce('已重置為 120 BPM', true);
                 return;
             }
             
@@ -666,7 +677,7 @@
                 const newBpm = parseInt(bpmMatch[1]);
                 if (newBpm >= 40 && newBpm <= 208) {
                     updateBPM(newBpm);
-                    announce(`設定為 ${bpm} BPM`);
+                    announce(`設定為 ${bpm} BPM`, true);
                 } else {
                     speak('速度需在 40 到 208 之間');
                 }
@@ -748,12 +759,12 @@
 
         btnIncrease.addEventListener('click', () => {
             updateBPM(bpm + 5);
-            announce(`${bpm} BPM`);
+            announce(`${bpm} BPM`, true);
         });
 
         btnDecrease.addEventListener('click', () => {
             updateBPM(bpm - 5);
-            announce(`${bpm} BPM`);
+            announce(`${bpm} BPM`, true);
         });
 
         bpmSlider.addEventListener('input', (e) => {
@@ -789,12 +800,12 @@
                 case 'ArrowUp':
                     e.preventDefault();
                     updateBPM(bpm + 5);
-                    announce(`${bpm} BPM`);
+                    announce(`${bpm} BPM`, true);
                     break;
                 case 'ArrowDown':
                     e.preventDefault();
                     updateBPM(bpm - 5);
-                    announce(`${bpm} BPM`);
+                    announce(`${bpm} BPM`, true);
                     break;
                 case 'KeyT':
                     e.preventDefault();
