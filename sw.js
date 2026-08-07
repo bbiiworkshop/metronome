@@ -1,39 +1,40 @@
-const CACHE_NAME = 'metronome-v1';
+const CACHE_NAME = 'metronome-v3';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
+  '/metronome/index.html',
+  '/metronome/manifest.json',
+  '/metronome/icon-192.png',
+  '/metronome/icon-512.png'
 ];
 
-// 安裝 Service Worker
+// 安裝 Service Worker：不快取首頁，避免緩存 404
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('快取已開啟');
-        return cache.addAll(urlsToCache);
-      })
-  );
-  self.skipWaiting();
+  event.skipWaiting(); // 立刻啟用新版 SW
 });
 
-// 攔截請求，優先從快取讀取
+// 攔截請求：Network-first（先試網路，失敗才用快取）
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  
   event.respondWith(
-    caches.match(event.request)
+    fetch(event.request)
       .then((response) => {
-        // 快取有就用快取，沒有就從網路抓
-        if (response) {
-          return response;
+        // 拿到網路回應，更新快取
+        if (response && response.status === 200) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
         }
-        return fetch(event.request);
+        return response;
+      })
+      .catch(() => {
+        // 網路失敗，改用快取
+        return caches.match(event.request);
       })
   );
 });
 
-// 啟動時清理舊快取
+// 啟動時強制清理所有舊快取
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {

@@ -347,13 +347,28 @@
     <script>
         // 註冊 Service Worker
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js')
-                .then((registration) => {
-                    console.log('Service Worker 註冊成功');
-                })
-                .catch((error) => {
-                    console.log('Service Worker 註冊失敗:', error);
+            // 強制解除舊版 SW並清除所有快取（解決 PWA 顯示 404 問題）
+            navigator.serviceWorker.getRegistrations().then((regs) => {
+                regs.forEach((reg) => {
+                    reg.unregister();
                 });
+            });
+            caches.keys().then((names) => {
+                names.forEach((name) => caches.delete(name));
+            });
+
+            // 等待清理完成後重新註冊新版
+            setTimeout(() => {
+                navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+                    .then((registration) => {
+                        console.log('Service Worker 註冊成功');
+                        // 強制檢查更新
+                        registration.update();
+                    })
+                    .catch((error) => {
+                        console.log('Service Worker 註冊失敗:', error);
+                    });
+            }, 500);
         }
 
         // 節拍器核心
