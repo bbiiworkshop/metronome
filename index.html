@@ -283,7 +283,7 @@
         <h1>🎵 語音節拍器</h1>
         <p class="subtitle">語音控制 | BPM: 40-208</p>
         
-        <div class="bpm-display" id="bpmDisplay">120</div>
+        <div class="bpm-display" id="bpmDisplay" role="status" aria-live="polite" aria-atomic="true">120</div>
         <div class="bpm-label">BPM (每分鐘節拍數)</div>
         
         <div class="beat-indicator">
@@ -294,22 +294,22 @@
         </div>
         
         <div class="controls">
-            <button class="btn-secondary btn-bpm" id="btnDecrease">− 5</button>
-            <button class="btn-secondary btn-bpm" id="btnIncrease">+ 5</button>
-            <button class="btn-primary" id="btnStart">▶ 播放</button>
-            <button class="btn-secondary" id="btnStop">⏹ 停止</button>
+            <button class="btn-secondary btn-bpm" id="btnDecrease" aria-label="減慢 5">− 5</button>
+            <button class="btn-secondary btn-bpm" id="btnIncrease" aria-label="加快 5">+ 5</button>
+            <button class="btn-primary" id="btnStart" aria-label="開始或停止播放">▶ 播放</button>
+            <button class="btn-secondary" id="btnStop" aria-label="停止">⏹ 停止</button>
         </div>
         
         <div class="slider-container">
-            <input type="range" id="bpmSlider" min="40" max="208" value="120">
+            <input type="range" id="bpmSlider" min="40" max="208" value="120" aria-label="速度 BPM 調整">
         </div>
         
         <div class="tap-tempo">
-            <button class="btn-secondary" id="btnTap">👆 手動拍速</button>
+            <button class="btn-secondary" id="btnTap" aria-label="手動拍速測量">👆 手動拍速</button>
             <span id="tapHint">（點擊 3 次以上測速）</span>
         </div>
         
-        <div class="voice-status">
+        <div class="voice-status" role="status" aria-live="polite">
             <svg class="mic-icon" id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
@@ -319,9 +319,11 @@
             <span class="voice-text" id="voiceText">點擊下方啟用語音控制</span>
         </div>
         
-        <button class="btn-primary btn-voice" id="btnVoice">
+        <button class="btn-primary btn-voice" id="btnVoice" aria-label="啟用或關閉語音控制">
             🎤 啟用語音控制
         </button>
+        
+        <button class="btn-secondary btn-audio-feedback" id="btnAudioFeedback" aria-label="切換語音回饋" aria-pressed="false" style="margin-bottom: 15px; width: 100%;">🔊 語音回饋：關</button>
         
         <div class="error-msg" id="errorMsg"></div>
         
@@ -360,6 +362,7 @@
         let isPlaying = false;
         let intervalId = null;
         let beatCount = 0;
+        let audioFeedbackEnabled = false;
 
         // DOM 元素
         const bpmDisplay = document.getElementById('bpmDisplay');
@@ -369,6 +372,7 @@
         const btnIncrease = document.getElementById('btnIncrease');
         const btnDecrease = document.getElementById('btnDecrease');
         const btnVoice = document.getElementById('btnVoice');
+        const btnAudioFeedback = document.getElementById('btnAudioFeedback');
         const btnTap = document.getElementById('btnTap');
         const micIcon = document.getElementById('micIcon');
         const voiceText = document.getElementById('voiceText');
@@ -445,9 +449,7 @@
             intervalId = setInterval(playBeat, 60000 / bpm);
             
             // 語音回饋
-            if (recognition && isListening) {
-                speak(`${bpm} BPM`);
-            }
+            announce(`${bpm} BPM`);
         }
 
         // 停止節拍器
@@ -463,9 +465,7 @@
                 dot.classList.remove('active');
             });
             
-            if (recognition && isListening) {
-                speak('已停止');
-            }
+            announce('已停止');
         }
 
         // 更新 BPM
@@ -508,6 +508,7 @@
                 
                 if (newBpm >= 40 && newBpm <= 208) {
                     updateBPM(newBpm);
+                    announce(`${bpm} BPM`);
                 }
             }
             
@@ -522,6 +523,13 @@
                 gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
                 osc.start(audioContext.currentTime);
                 osc.stop(audioContext.currentTime + 0.05);
+            }
+        }
+
+        // 語音回饋（視障友善：獨立於語音辨識）
+        function announce(text) {
+            if (audioFeedbackEnabled || isListening) {
+                speak(text);
             }
         }
 
@@ -621,19 +629,19 @@
             
             if (cmd.includes('加快') || cmd.includes('變快') || cmd.includes('加速') || cmd.includes('快一點')) {
                 updateBPM(bpm + 10);
-                speak(`${bpm} BPM`);
+                announce(`${bpm} BPM`);
                 return;
             }
             
             if (cmd.includes('變慢') || cmd.includes('減慢') || cmd.includes('降速') || cmd.includes('慢一點')) {
                 updateBPM(bpm - 10);
-                speak(`${bpm} BPM`);
+                announce(`${bpm} BPM`);
                 return;
             }
             
             if (cmd.includes('重置') || cmd.includes('重設') || cmd.includes('恢復') || cmd.includes('預設')) {
                 updateBPM(120);
-                speak('已重置為 120 BPM');
+                announce('已重置為 120 BPM');
                 return;
             }
             
@@ -643,7 +651,7 @@
                 const newBpm = parseInt(bpmMatch[1]);
                 if (newBpm >= 40 && newBpm <= 208) {
                     updateBPM(newBpm);
-                    speak(`設定為 ${bpm} BPM`);
+                    announce(`設定為 ${bpm} BPM`);
                 } else {
                     speak('速度需在 40 到 208 之間');
                 }
@@ -656,7 +664,7 @@
                 const newBpm = parseInt(numberMatch[1]);
                 if (newBpm >= 40 && newBpm <= 208) {
                     updateBPM(newBpm);
-                    speak(`${bpm} BPM`);
+                    announce(`${bpm} BPM`);
                 }
                 return;
             }
@@ -725,17 +733,29 @@
 
         btnIncrease.addEventListener('click', () => {
             updateBPM(bpm + 5);
+            announce(`${bpm} BPM`);
         });
 
         btnDecrease.addEventListener('click', () => {
             updateBPM(bpm - 5);
+            announce(`${bpm} BPM`);
         });
 
         bpmSlider.addEventListener('input', (e) => {
             updateBPM(parseInt(e.target.value), false);
+            announce(`${bpm} BPM`);
         });
 
         btnVoice.addEventListener('click', toggleVoice);
+
+        btnAudioFeedback.addEventListener('click', () => {
+            audioFeedbackEnabled = !audioFeedbackEnabled;
+            btnAudioFeedback.textContent = audioFeedbackEnabled ? '🔊 語音回饋：開' : '🔊 語音回饋：關';
+            btnAudioFeedback.setAttribute('aria-pressed', audioFeedbackEnabled);
+            if (audioFeedbackEnabled) {
+                speak('語音回饋已開啟，現在會唸出速度變化');
+            }
+        });
 
         btnTap.addEventListener('click', handleTap);
 
@@ -754,10 +774,12 @@
                 case 'ArrowUp':
                     e.preventDefault();
                     updateBPM(bpm + 5);
+                    announce(`${bpm} BPM`);
                     break;
                 case 'ArrowDown':
                     e.preventDefault();
                     updateBPM(bpm - 5);
+                    announce(`${bpm} BPM`);
                     break;
                 case 'KeyT':
                     e.preventDefault();
