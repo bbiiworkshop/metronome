@@ -72,8 +72,7 @@
 <div id="err" role="alert"></div>
 
 <div id="topbar">
-  <div id="status" aria-live="polite">已停止</div>
-  速度 <span id="bpmValue" aria-live="polite">60</span> 拍/分
+  速度 <span id="bpmValue" aria-live="polite">60</span>
 </div>
 
 <div id="display" aria-hidden="true">
@@ -116,7 +115,6 @@
   const scheduleAhead = 0.12;
 
   const $ = (id) => document.getElementById(id);
-  const elStatus = $("status");
   const elBpm = $("bpmValue");
   const elBigBpm = $("bigBpm");
   const elToggle = $("btnToggle");
@@ -207,7 +205,6 @@
   function updateUI() {
     elBpm.textContent = bpm;
     elBigBpm.textContent = bpm;
-    elStatus.textContent = isPlaying ? "播放中" : "已停止";
     const playing = isPlaying;
   elToggle.innerHTML = (playing ? '<span aria-hidden="true">■</span> ' : '<span aria-hidden="true">▶</span> ') + (playing ? "停止播放" : "開始播放");
     elToggle.classList.toggle("playing", playing);
