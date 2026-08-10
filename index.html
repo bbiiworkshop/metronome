@@ -219,24 +219,22 @@
     n.start(time); n.stop(time + dur + 0.01);
   }
   // 人聲數拍（語音合成，限「人聲」音效）
-  function speakCount(beatNumber, accent) {
+  function speakCount(localBeat, accent) {
     if (!("speechSynthesis" in window)) return;
-    const u = new SpeechSynthesisUtterance(String(beatNumber + 1));
+    const u = new SpeechSynthesisUtterance(String(localBeat + 1));
     u.lang = "zh-TW";
     u.rate = 1.1;
     u.pitch = accent ? 1.25 : 1.05;
     u.volume = 1.0;
     if (voiceZH) u.voice = voiceZH;
-    try {
-      if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    } catch (e) {}
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
   }
   // 依音效類型播放節拍聲；accent=提示音拍位（重音）
   function playSound(type, beatNumber, time, accent) {
     if (type === "voice") {
       const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
-      setTimeout(() => speakCount((beatNumber % beatsPerBar) + 1, accent), delay);
+      setTimeout(() => speakCount(beatNumber % beatsPerBar, accent), delay);
       return;
     }
     if (type === "high") {
