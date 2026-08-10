@@ -136,17 +136,45 @@
   }
 
   // 節拍聲 + 震動（給視障者非視覺回饋，不含語音報讀）
+  let noiseBuf = null;
+  function getNoiseBuffer() {
+    if (noiseBuf) return noiseBuf;
+    const len = Math.floor(audioCtx.sampleRate * 0.05);
+    noiseBuf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    return noiseBuf;
+  }
+
   function scheduleClick(beatNumber, time) {
     if (!audioCtx) return;
+    const isDownbeat = (beatNumber === 0);
+    const freq = isDownbeat ? 1250 : 830;   // 滴(高) / 噠(低)
+
+    // 音調成分：triangle + 快速下滑，形似機械節拍器 "滴答"
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    const isDownbeat = (beatNumber === 0);
-    osc.frequency.value = isDownbeat ? 1000 : 800;
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq, time);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + 0.025);
     gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.exponentialRampToValueAtTime(0.6, time + 0.003);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.7, time + 0.001);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.045);
     osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.start(time); osc.stop(time + 0.07);
+    osc.start(time); osc.stop(time + 0.05);
+
+    // 噪聲成分：短促打擊瞬間，強化 "嗒" 的顆粒感
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = getNoiseBuffer();
+    const nf = audioCtx.createBiquadFilter();
+    nf.type = "bandpass";
+    nf.frequency.value = isDownbeat ? 2200 : 1300;
+    nf.Q.value = 0.8;
+    const ng = audioCtx.createGain();
+    ng.gain.setValueAtTime(0.35, time);
+    ng.gain.exponentialRampToValueAtTime(0.0001, time + 0.03);
+    noise.connect(nf); nf.connect(ng); ng.connect(audioCtx.destination);
+    noise.start(time); noise.stop(time + 0.05);
 
     const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
     if (navigator.vibrate) setTimeout(() => navigator.vibrate(isDownbeat ? 90 : 35), delay);
