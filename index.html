@@ -85,12 +85,12 @@
   </div>
 </div>
 
-<div id="hint">使用下方按鈕開始、停止、加快或變慢。開啟手機的 TalkBack 即可聽取各按鈕功能。</div>
+<div id="hint" aria-hidden="true">使用下方按鈕開始、停止、加快或變慢。開啟手機的 TalkBack 即可聽取各按鈕功能。</div>
 
 <div id="controls">
-  <button class="btn" id="btnSlower" aria-label="變慢，每分鐘減少四拍">− 變慢</button>
-  <button class="btn" id="btnToggle" aria-label="開始播放">▶ 開始播放</button>
-  <button class="btn" id="btnFaster" aria-label="加快，每分鐘增加四拍">＋ 加快</button>
+  <button class="btn" id="btnSlower"><span aria-hidden="true">−</span> 變慢</button>
+  <button class="btn" id="btnToggle">▶ 開始播放</button>
+  <button class="btn" id="btnFaster"><span aria-hidden="true">＋</span> 加快</button>
 </div>
 
 <script>
@@ -177,9 +177,8 @@
     elBigBpm.textContent = bpm;
     elStatus.textContent = isPlaying ? "播放中" : "已停止";
     const playing = isPlaying;
-    elToggle.textContent = playing ? "■ 停止播放" : "▶ 開始播放";
+  elToggle.innerHTML = (playing ? '<span aria-hidden="true">■</span> ' : '<span aria-hidden="true">▶</span> ') + (playing ? "停止播放" : "開始播放");
     elToggle.classList.toggle("playing", playing);
-    elToggle.setAttribute("aria-label", playing ? "停止播放" : "開始播放");
   }
 
   function start() { if (isPlaying) return; isPlaying = true; startScheduler(); updateUI(); }
