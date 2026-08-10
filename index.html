@@ -251,9 +251,8 @@
   function scheduleClick(beatNumber, time, localBeat) {
     if (!audioCtx) return;
     // localBeat = beatInBar 在++前的值（即將播放的拍位 1~beatsPerBar）
-    const callingBeat = ((localBeat - 2 + beatsPerBar) % beatsPerBar) + 1;
-    const isAccent = cueBeats.includes(callingBeat);
-    playSound(soundType, beatNumber, time, isAccent, callingBeat);
+    const isAccent = cueBeats.includes(localBeat);
+    playSound(soundType, beatNumber, time, isAccent, localBeat);
     const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
     if (navigator.vibrate) setTimeout(() => navigator.vibrate(isAccent ? 90 : 35), delay);
     setTimeout(() => flashBeat(beatNumber, isAccent), delay);
@@ -269,10 +268,11 @@
   function scheduler() {
     if (!audioCtx) return;
     while (nextNoteTime < audioCtx.currentTime + scheduleAhead) {
+      if (beatInBar > beatsPerBar) beatInBar = 1;
       scheduleClick(currentBeat % beatsPerBar, nextNoteTime, beatInBar);
       nextNoteTime += 60.0 / bpm;
       currentBeat++;
-      beatInBar = (beatInBar % beatsPerBar) + 1;
+      beatInBar++;
     }
   }
   function startScheduler() {
