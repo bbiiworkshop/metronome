@@ -200,11 +200,13 @@
     osc.type = wave;
     osc.frequency.setValueAtTime(freq, time);
     if (slide) osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + dur);
-    g.gain.setValueAtTime(0.0001, time);
-    g.gain.exponentialRampToValueAtTime(peak, time + 0.001);
-    g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    // 線性 envelope：快速到峰值 → 線性遞減，確保聲音一定播出
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(peak, time + 0.002);
+    g.gain.linearRampToValueAtTime(0, time + dur);
     osc.connect(g); g.connect(masterGain);
-    osc.start(time); osc.stop(time + dur + 0.01);
+    const t0 = time, t1 = time + dur + 0.01;
+    if (t0 < audioCtx.currentTime) { osc.start(0); osc.stop(t1 - audioCtx.currentTime + audioCtx.currentTime); } else { osc.start(t0); osc.stop(t1); }
   }
   // 噪聲打擊瞬間
   function noiseBurst(time, freq, peak, dur) {
@@ -215,9 +217,10 @@
     f.type = "bandpass"; f.frequency.value = freq; f.Q.value = 0.8;
     const g = audioCtx.createGain();
     g.gain.setValueAtTime(peak, time);
-    g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    g.gain.linearRampToValueAtTime(0, time + dur);
     n.connect(f); f.connect(g); g.connect(masterGain);
-    n.start(time); n.stop(time + dur + 0.01);
+    const t0 = time, t1 = time + dur + 0.01;
+    if (t0 < audioCtx.currentTime) { n.start(0); n.stop(t1 - audioCtx.currentTime + audioCtx.currentTime); } else { n.start(t0); n.stop(t1); }
   }
   // 人聲數拍（語音合成，限「人聲」音效）
   function speakCount(localBeat) {
