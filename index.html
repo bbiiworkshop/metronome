@@ -82,7 +82,7 @@
   <button class="btn" id="btnToggle">▶ 開始播放</button>
 </div>
 
-<div id="display" aria-hidden="true">
+<div id="display">
   <div id="flash"></div>
   <div id="bigBpm">60</div>
   <div id="bigBpmLabel">拍 / 分鐘</div>
@@ -250,14 +250,16 @@
 
   function scheduleClick(beatNumber, time, localBeat) {
     if (!audioCtx) return;
-    const isAccent = cueBeats.includes(localBeat);
-    playSound(soundType, beatNumber, time, isAccent, localBeat);
+    // localBeat = beatInBar 在++前的值（即將播放的拍位 1~beatsPerBar）
+    const callingBeat = ((localBeat - 2 + beatsPerBar) % beatsPerBar) + 1;
+    const isAccent = cueBeats.includes(callingBeat);
+    playSound(soundType, beatNumber, time, isAccent, callingBeat);
     const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
     if (navigator.vibrate) setTimeout(() => navigator.vibrate(isAccent ? 90 : 35), delay);
-    setTimeout(() => flashBeat(isAccent), delay);
+    setTimeout(() => flashBeat(beatNumber, isAccent), delay);
   }
 
-  function flashBeat(isDownbeat) {
+  function flashBeat(beatNumber, isDownbeat) {
     elFlash.classList.toggle("downbeat", isDownbeat);
     elFlash.style.opacity = "0.55";
     setTimeout(() => { elFlash.style.opacity = "0"; }, 60);
