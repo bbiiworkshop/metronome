@@ -270,8 +270,7 @@
       scheduleClick(currentBeat % beatsPerBar, nextNoteTime, beatInBar);
       nextNoteTime += 60.0 / bpm;
       currentBeat++;
-      beatInBar++;
-      if (beatInBar > beatsPerBar) beatInBar = 1;
+      beatInBar = (beatInBar % beatsPerBar) + 1;
     }
   }
   function startScheduler() {
