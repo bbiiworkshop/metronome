@@ -202,10 +202,10 @@
     osc.type = wave;
     osc.frequency.setValueAtTime(freq, time);
     if (slide) osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + dur);
-    // 線性 envelope：快速到峰值 → 線性遞減
-    g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(peak, time + 0.002);
-    g.gain.linearRampToValueAtTime(0, time + dur);
+    // 自然 envelope：快速到峰值 → 指數衰減（自然漸弱，不截斷）
+    g.gain.setValueAtTime(0.001, time);
+    g.gain.exponentialRampToValueAtTime(peak, time + 0.001);
+    g.gain.exponentialRampToValueAtTime(0.001, time + dur);
     osc.connect(g); g.connect(masterGain);
     osc.start(time); osc.stop(time + dur + 0.02);
   }
@@ -219,7 +219,7 @@
     f.type = "bandpass"; f.frequency.value = freq; f.Q.value = 0.8;
     const g = audioCtx.createGain();
     g.gain.setValueAtTime(peak, time);
-    g.gain.linearRampToValueAtTime(0, time + dur);
+    g.gain.exponentialRampToValueAtTime(0.001, time + dur);
     n.connect(f); f.connect(g); g.connect(masterGain);
     n.start(time); n.stop(time + dur + 0.02);
   }
@@ -232,7 +232,6 @@
     u.pitch = 1.1;
     u.volume = 1.0;
     if (voiceZH) u.voice = voiceZH;
-    window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   }
   // 依音效類型播放節拍聲；accent=提示音拍位（重音）
