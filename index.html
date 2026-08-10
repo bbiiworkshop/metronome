@@ -147,6 +147,7 @@
   let voiceZH = null;
   let nextNoteTime = 0;
   let currentBeat = 0;
+  let beatInBar = 1;
   let schedulerTimer = null;
   const lookahead = 25;
   const scheduleAhead = 0.12;
@@ -219,22 +220,22 @@
     n.start(time); n.stop(time + dur + 0.01);
   }
   // 人聲數拍（語音合成，限「人聲」音效）
-  function speakCount(localBeat, accent) {
+  function speakCount(localBeat) {
     if (!("speechSynthesis" in window)) return;
-    const u = new SpeechSynthesisUtterance(String(localBeat + 1));
+    const u = new SpeechSynthesisUtterance(String(localBeat));
     u.lang = "zh-TW";
     u.rate = 1.1;
-    u.pitch = accent ? 1.25 : 1.05;
+    u.pitch = 1.1;
     u.volume = 1.0;
     if (voiceZH) u.voice = voiceZH;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   }
   // 依音效類型播放節拍聲；accent=提示音拍位（重音）
-  function playSound(type, beatNumber, time, accent) {
+  function playSound(type, beatNumber, time, isAccent, localBeat) {
     if (type === "voice") {
       const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
-      setTimeout(() => speakCount(beatNumber % beatsPerBar, accent), delay);
+      setTimeout(() => speakCount(localBeat), delay);
       return;
     }
     if (type === "high") {
@@ -247,10 +248,10 @@
     }
   }
 
-  function scheduleClick(beatNumber, time) {
+  function scheduleClick(beatNumber, time, localBeat) {
     if (!audioCtx) return;
-    const isAccent = cueBeats.includes((beatNumber % beatsPerBar) + 1);
-    playSound(soundType, beatNumber, time, isAccent);
+    const isAccent = cueBeats.includes(localBeat);
+    playSound(soundType, beatNumber, time, isAccent, localBeat);
     const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
     if (navigator.vibrate) setTimeout(() => navigator.vibrate(isAccent ? 90 : 35), delay);
     setTimeout(() => flashBeat(isAccent), delay);
@@ -266,14 +267,16 @@
   function scheduler() {
     if (!audioCtx) return;
     while (nextNoteTime < audioCtx.currentTime + scheduleAhead) {
-      scheduleClick(currentBeat % beatsPerBar, nextNoteTime);
+      scheduleClick(currentBeat % beatsPerBar, nextNoteTime, beatInBar);
       nextNoteTime += 60.0 / bpm;
       currentBeat++;
+      beatInBar++;
+      if (beatInBar > beatsPerBar) beatInBar = 1;
     }
   }
   function startScheduler() {
     ensureAudio(); if (!audioCtx) return;
-    currentBeat = 0; nextNoteTime = audioCtx.currentTime + 0.06;
+    currentBeat = 0; beatInBar = 1; nextNoteTime = audioCtx.currentTime + 0.06;
     schedulerTimer = setInterval(scheduler, lookahead);
   }
   function stopScheduler() { clearInterval(schedulerTimer); schedulerTimer = null; elDots.forEach((d) => d.classList.remove("active")); }
