@@ -237,10 +237,8 @@
   // 依音效類型播放節拍聲；accent=提示音拍位（重音）
   function playSound(type, beatNumber, time, isAccent, localBeat) {
     if (type === "voice") {
-      // 提前 300ms 排程（抵消 look-ahead 100ms + TTS 啟動延遲 200ms）
-      // 一次 setTimeout，無遞迴，無累積誤差
-      const delay = Math.max(0, (time - audioCtx.currentTime) * 1000 - 300);
-      setTimeout(() => speakCount(localBeat), delay);
+      // 移除人工 offset，setTimeout 落後剛好由佇列遞補，朗讀自然接續
+      setTimeout(() => speakCount(localBeat), 0);
       return;
     }
     if (type === "high") {
