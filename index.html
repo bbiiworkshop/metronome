@@ -261,7 +261,7 @@
     elFlash.classList.toggle("downbeat", isDownbeat);
     elFlash.style.opacity = "0.55";
     setTimeout(() => { elFlash.style.opacity = "0"; }, 60);
-    elDots.forEach((d, i) => d.classList.toggle("active", i === currentBeat % beatsPerBar));
+    elDots.forEach((d, i) => d.classList.toggle("active", i === beatNumber));
   }
 
   function scheduler() {
