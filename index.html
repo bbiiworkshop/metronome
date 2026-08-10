@@ -238,28 +238,18 @@
   // 依音效類型播放節拍聲；accent=提示音拍位（重音）
   function playSound(type, beatNumber, time, isAccent, localBeat) {
     if (type === "voice") {
-      // 以音頻時鐘為基準，用 setTimeout 微調延遲，避免 JS 定時器漂移
-      const target = time;
-      const scheduleTick = () => {
-        const remaining = (target - audioCtx.currentTime) * 1000;
-        if (remaining > 25) {
-          setTimeout(scheduleTick, remaining - 20);
-        } else if (remaining > 0) {
-          setTimeout(() => speakCount(localBeat), remaining);
-        } else {
-          speakCount(localBeat);
-        }
-      };
-      scheduleTick();
+      // 直接 setTimeout，simple 即可；人聲不需與音頻精確同步
+      const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
+      setTimeout(() => speakCount(localBeat), delay);
       return;
     }
     if (type === "high") {
       // 尖銳高音（方波，無滑音）
-      tone(time, accent ? 2600 : 1900, "square", 0.85, 0.10, false);
-      noiseBurst(time, accent ? 3200 : 2200, 0.45, 0.06);
+      tone(time, isAccent ? 2600 : 1900, "square", 0.85, 0.10, false);
+      noiseBurst(time, isAccent ? 3200 : 2200, 0.45, 0.06);
     } else { // classic（原來設定的聲音：滴噠）
-      tone(time, accent ? 1250 : 830, "triangle", 0.9, 0.15, true);
-      noiseBurst(time, accent ? 2400 : 1300, 0.45, 0.06);
+      tone(time, isAccent ? 1250 : 830, "triangle", 0.9, 0.15, true);
+      noiseBurst(time, isAccent ? 2400 : 1300, 0.45, 0.06);
     }
   }
 
