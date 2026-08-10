@@ -259,7 +259,6 @@
     const isAccent = cueBeats.includes(localBeat);
     playSound(soundType, beatNumber, time, isAccent, localBeat);
     const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
-    if (navigator.vibrate) setTimeout(() => navigator.vibrate(isAccent ? 90 : 35), delay);
     setTimeout(() => flashBeat(beatNumber, isAccent), delay);
   }
 
