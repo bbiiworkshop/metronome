@@ -195,22 +195,24 @@
   // 單音（音調成分）
   function tone(time, freq, wave, peak, dur, slide) {
     if (!audioCtx) return;
+    // 若 time 已過去（瀏覽器停頓/分頁），改用現在馬上發聲
+    if (time < audioCtx.currentTime) time = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     osc.type = wave;
     osc.frequency.setValueAtTime(freq, time);
     if (slide) osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + dur);
-    // 線性 envelope：快速到峰值 → 線性遞減，確保聲音一定播出
+    // 線性 envelope：快速到峰值 → 線性遞減
     g.gain.setValueAtTime(0, time);
     g.gain.linearRampToValueAtTime(peak, time + 0.002);
     g.gain.linearRampToValueAtTime(0, time + dur);
     osc.connect(g); g.connect(masterGain);
-    const t0 = time, t1 = time + dur + 0.01;
-    if (t0 < audioCtx.currentTime) { osc.start(0); osc.stop(t1 - audioCtx.currentTime + audioCtx.currentTime); } else { osc.start(t0); osc.stop(t1); }
+    osc.start(time); osc.stop(time + dur + 0.02);
   }
   // 噪聲打擊瞬間
   function noiseBurst(time, freq, peak, dur) {
     if (!audioCtx) return;
+    if (time < audioCtx.currentTime) time = audioCtx.currentTime;
     const n = audioCtx.createBufferSource();
     n.buffer = getNoiseBuffer();
     const f = audioCtx.createBiquadFilter();
@@ -219,8 +221,7 @@
     g.gain.setValueAtTime(peak, time);
     g.gain.linearRampToValueAtTime(0, time + dur);
     n.connect(f); f.connect(g); g.connect(masterGain);
-    const t0 = time, t1 = time + dur + 0.01;
-    if (t0 < audioCtx.currentTime) { n.start(0); n.stop(t1 - audioCtx.currentTime + audioCtx.currentTime); } else { n.start(t0); n.stop(t1); }
+    n.start(time); n.stop(time + dur + 0.02);
   }
   // 人聲數拍（語音合成，限「人聲」音效）
   function speakCount(localBeat) {
@@ -237,8 +238,19 @@
   // 依音效類型播放節拍聲；accent=提示音拍位（重音）
   function playSound(type, beatNumber, time, isAccent, localBeat) {
     if (type === "voice") {
-      const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
-      setTimeout(() => speakCount(localBeat), delay);
+      // 以音頻時鐘為基準，用 setTimeout 微調延遲，避免 JS 定時器漂移
+      const target = time;
+      const scheduleTick = () => {
+        const remaining = (target - audioCtx.currentTime) * 1000;
+        if (remaining > 25) {
+          setTimeout(scheduleTick, remaining - 20);
+        } else if (remaining > 0) {
+          setTimeout(() => speakCount(localBeat), remaining);
+        } else {
+          speakCount(localBeat);
+        }
+      };
+      scheduleTick();
       return;
     }
     if (type === "high") {
