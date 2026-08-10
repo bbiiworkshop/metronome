@@ -236,7 +236,7 @@
   function playSound(type, beatNumber, time, accent) {
     if (type === "voice") {
       const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
-      setTimeout(() => speakCount(beatNumber, accent), delay);
+      setTimeout(() => speakCount((beatNumber % beatsPerBar) + 1, accent), delay);
       return;
     }
     if (type === "high") {
@@ -409,9 +409,9 @@
     }
     if (n >= 4) {
       const a = document.createElement("option");
-      a.value = "1,3"; a.textContent = "第一、三拍"; cueSel.appendChild(a);
+      a.value = "1,3"; a.textContent = "1,3 拍"; cueSel.appendChild(a);
       const b = document.createElement("option");
-      b.value = "2,4"; b.textContent = "第二、四拍"; cueSel.appendChild(b);
+      b.value = "2,4"; b.textContent = "2,4 拍"; cueSel.appendChild(b);
     }
     cueSel.value = [...cueSel.options].some((o) => o.value === prev) ? prev : "1";
     cueBeats = cueSel.value.split(",").map(Number);
