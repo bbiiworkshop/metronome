@@ -1,829 +1,216 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>語音節拍器</title>
-    
-    <!-- PWA 設定 -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#667eea">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="節拍器">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>視障節拍器</title>
+<meta name="theme-color" content="#000000">
+<meta name="description" content="專為視障者設計、搭配 TalkBack 使用的節拍器">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #000; color: #fff;
+    font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+    overflow: hidden; user-select: none;
+  }
+  body { display: flex; flex-direction: column; }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            min-height: 100dvh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 15px;
-            overflow-x: hidden;
-        }
+  /* 頂部狀態列（TalkBack 會自動報讀這裡的變化） */
+  #topbar {
+    padding: env(safe-area-inset-top) 16px 8px;
+    text-align: center; font-size: 18px; line-height: 1.5;
+    background: #111;
+  }
+  #status { font-weight: bold; }
+  #bpmValue { font-size: 22px; color: #FFD54A; font-weight: bold; }
 
-        .container {
-            background: white;
-            border-radius: 25px;
-            padding: 25px 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 420px;
-            width: 100%;
-            text-align: center;
-        }
+  /* 主顯示區（純視覺，TalkBack 不需讀這裡，因頂部已報讀） */
+  #display {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #000;
+    position: relative;
+  }
+  #bigBpm { font-size: 120px; font-weight: 900; line-height: 1; color: #FFD54A; }
+  #bigBpmLabel { font-size: 20px; color: #aaa; margin-top: 4px; }
+  #beatDots { display: flex; gap: 14px; margin-top: 24px; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; background: #333; border: 2px solid #555; }
+  .dot.active { background: #FFD54A; border-color: #FFD54A; }
+  .dot.downbeat.active { background: #fff; border-color: #fff; }
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity 0.04s; }
+  #flash.downbeat { background: #FFD54A; }
 
-        h1 {
-            color: #333;
-            margin-bottom: 5px;
-            font-size: 26px;
-        }
+  /* 操作說明（給明眼人看；TalkBack 也會讀一次） */
+  #hint { text-align: center; font-size: 14px; color: #888; padding: 6px 16px; background: #0a0a0a; line-height: 1.5; }
 
-        .subtitle {
-            color: #666;
-            margin-bottom: 20px;
-            font-size: 13px;
-        }
+  /* 底部操作按鈕（TalkBack 主要報讀對象） */
+  #controls { padding: 12px 16px calc(env(safe-area-inset-bottom) + 12px); background: #111; display: flex; gap: 10px; }
+  .btn {
+    flex: 1; min-height: 72px; font-size: 22px; font-weight: bold;
+    border: none; border-radius: 14px; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    background: #1f6feb;
+  }
+  .btn:active { transform: scale(0.97); }
+  #btnSlower { background: #424242; }
+  #btnFaster { background: #424242; }
+  #btnToggle { background: #2e7d32; }
+  #btnToggle.playing { background: #c62828; }
 
-        .bpm-display {
-            font-size: 100px;
-            font-weight: bold;
-            color: #667eea;
-            margin: 15px 0;
-            line-height: 1;
-            transition: transform 0.1s;
-        }
-
-        .bpm-display.tapped {
-            transform: scale(1.1);
-        }
-
-        .bpm-label {
-            font-size: 16px;
-            color: #999;
-            margin-bottom: 20px;
-        }
-
-        .beat-indicator {
-            display: flex;
-            justify-content: center;
-            gap: 12px;
-            margin-bottom: 25px;
-        }
-
-        .beat-dot {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #ddd;
-            transition: all 0.1s;
-        }
-
-        .beat-dot.active {
-            background: #667eea;
-            transform: scale(1.4);
-            box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
-        }
-
-        .controls {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 25px;
-        }
-
-        button {
-            padding: 16px 20px;
-            font-size: 18px;
-            border: none;
-            border-radius: 15px;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-weight: 600;
-            touch-action: manipulation;
-        }
-
-        button:active {
-            transform: scale(0.95);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-secondary {
-            background: #f0f0f0;
-            color: #333;
-        }
-
-        .btn-bpm {
-            font-size: 22px;
-            padding: 14px;
-        }
-
-        .slider-container {
-            margin-bottom: 25px;
-        }
-
-        input[type="range"] {
-            width: 100%;
-            height: 10px;
-            border-radius: 5px;
-            background: #e0e0e0;
-            outline: none;
-            -webkit-appearance: none;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            cursor: pointer;
-        }
-
-        .voice-status {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            min-height: 44px;
-            flex-wrap: wrap;
-        }
-
-        .mic-icon {
-            width: 22px;
-            height: 22px;
-            flex-shrink: 0;
-        }
-
-        .mic-icon.active {
-            animation: pulse 1.5s infinite;
-            color: #667eea;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .voice-text {
-            color: #666;
-            font-size: 13px;
-            word-break: break-word;
-        }
-
-        .btn-voice {
-            width: 100%;
-            margin-bottom: 15px;
-            padding: 14px 20px;
-        }
-
-        .voice-commands {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
-            margin-top: 10px;
-        }
-
-        .voice-commands h3 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 15px;
-        }
-
-        .command-list {
-            text-align: left;
-            font-size: 13px;
-            color: #666;
-            line-height: 1.7;
-            list-style: none;
-        }
-
-        .command-list li {
-            margin-bottom: 4px;
-            padding-left: 8px;
-            position: relative;
-        }
-
-        .command-list li::before {
-            content: '•';
-            position: absolute;
-            left: 0;
-            color: #667eea;
-        }
-
-        .command-keyword {
-            color: #667eea;
-            font-weight: 600;
-        }
-
-        .tap-tempo {
-            margin-top: 15px;
-            padding: 12px;
-            background: #f0f0f0;
-            border-radius: 10px;
-            font-size: 14px;
-            color: #666;
-        }
-
-        .tap-tempo button {
-            padding: 10px 20px;
-            font-size: 16px;
-        }
-
-        /* PWA 安裝提示 */
-        .install-prompt {
-            display: none;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 15px;
-            font-size: 14px;
-        }
-
-        .install-prompt.show {
-            display: block;
-        }
-
-        .error-msg {
-            background: #ffebee;
-            color: #c62828;
-            padding: 12px;
-            border-radius: 10px;
-            margin-top: 15px;
-            font-size: 13px;
-            display: none;
-        }
-
-        .error-msg.show {
-            display: block;
-        }
-    </style>
+  #err { position: fixed; top: 0; left: 0; right: 0; background: #b71c1c; color: #fff; padding: 12px 16px; font-size: 15px; display: none; z-index: 99; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎵 語音節拍器</h1>
-        <p class="subtitle">語音控制 | BPM: 40-208</p>
-        
-        <div class="bpm-display" id="bpmDisplay" role="status" aria-live="polite" aria-atomic="true">120</div>
-        <div class="bpm-label">BPM (每分鐘節拍數)</div>
-        
-        <div class="beat-indicator">
-            <div class="beat-dot" id="beat1"></div>
-            <div class="beat-dot" id="beat2"></div>
-            <div class="beat-dot" id="beat3"></div>
-            <div class="beat-dot" id="beat4"></div>
-        </div>
-        
-        <div class="controls">
-            <button class="btn-secondary btn-bpm" id="btnDecrease" aria-label="減慢 5">− 5</button>
-            <button class="btn-secondary btn-bpm" id="btnIncrease" aria-label="加快 5">+ 5</button>
-            <button class="btn-primary" id="btnStart" aria-label="開始或停止播放">▶ 播放</button>
-            <button class="btn-secondary" id="btnStop" aria-label="停止">⏹ 停止</button>
-        </div>
-        
-        <div class="slider-container">
-            <input type="range" id="bpmSlider" min="40" max="208" value="120" aria-label="速度 BPM 調整">
-        </div>
-        
-        <div class="tap-tempo">
-            <button class="btn-secondary" id="btnTap" aria-label="手動拍速測量">👆 手動拍速</button>
-            <span id="tapHint">（點擊 3 次以上測速）</span>
-        </div>
-        
-        <div class="voice-status" role="status" aria-live="polite">
-            <svg class="mic-icon" id="micIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                <line x1="12" y1="19" x2="12" y2="23"></line>
-                <line x1="8" y1="23" x2="16" y2="23"></line>
-            </svg>
-            <span class="voice-text" id="voiceText">點擊下方啟用語音控制</span>
-        </div>
-        
-        <button class="btn-primary btn-voice" id="btnVoice" aria-label="啟用或關閉語音控制">
-            🎤 啟用語音控制
-        </button>
-        
-        <button class="btn-secondary btn-audio-feedback" id="btnAudioFeedback" aria-label="切換語音回饋" aria-pressed="false" style="margin-bottom: 15px; width: 100%;">🔊 語音回饋：關</button>
-        
-        <div class="error-msg" id="errorMsg"></div>
-        
-        <div class="voice-commands">
-            <h3>📋 語音指令</h3>
-            <ul class="command-list">
-                <li><span class="command-keyword">開始</span> / <span class="command-keyword">播放</span> - 開始播放</li>
-                <li><span class="command-keyword">停止</span> / <span class="command-keyword">暫停</span> - 停止播放</li>
-                <li><span class="command-keyword">加快</span> / <span class="command-keyword">變快</span> - +10 BPM</li>
-                <li><span class="command-keyword">變慢</span> / <span class="command-keyword">減慢</span> - -10 BPM</li>
-                <li><span class="command-keyword">XXX 拍</span> / <span class="command-keyword">XXX BPM</span> - 設定速度</li>
-                <li><span class="command-keyword">重置</span> - 恢復 120 BPM</li>
-            </ul>
-        </div>
-        
-        <div class="install-prompt" id="installPrompt">
-            💡 點擊下方「分享」→「加入主畫面」，即可安裝為 App
-        </div>
-    </div>
 
-    <script>
-        // 註冊 Service Worker
-        if ('serviceWorker' in navigator) {
-            // 強制解除舊版 SW並清除所有快取（解決 PWA 顯示 404 問題）
-            navigator.serviceWorker.getRegistrations().then((regs) => {
-                regs.forEach((reg) => {
-                    reg.unregister();
-                });
-            });
-            caches.keys().then((names) => {
-                names.forEach((name) => caches.delete(name));
-            });
+<div id="err" role="alert"></div>
 
-            // 等待清理完成後重新註冊新版
-            setTimeout(() => {
-                navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
-                    .then((registration) => {
-                        console.log('Service Worker 註冊成功');
-                        // 強制檢查更新
-                        registration.update();
-                    })
-                    .catch((error) => {
-                        console.log('Service Worker 註冊失敗:', error);
-                    });
-            }, 500);
-        }
+<div id="topbar">
+  <div id="status" aria-live="polite">已停止</div>
+  速度 <span id="bpmValue" aria-live="polite">60</span> 拍/分
+</div>
 
-        // 節拍器核心
-        let audioContext = null;
-        let bpm = 120;
-        let isPlaying = false;
-        let intervalId = null;
-        let beatCount = 0;
-        let audioFeedbackEnabled = false;
+<div id="display" aria-hidden="true">
+  <div id="flash"></div>
+  <div id="bigBpm">60</div>
+  <div id="bigBpmLabel">拍 / 分鐘</div>
+  <div id="beatDots">
+    <div class="dot downbeat" data-i="0"></div>
+    <div class="dot" data-i="1"></div>
+    <div class="dot" data-i="2"></div>
+    <div class="dot" data-i="3"></div>
+  </div>
+</div>
 
-        // DOM 元素
-        const bpmDisplay = document.getElementById('bpmDisplay');
-        const bpmSlider = document.getElementById('bpmSlider');
-        const btnStart = document.getElementById('btnStart');
-        const btnStop = document.getElementById('btnStop');
-        const btnIncrease = document.getElementById('btnIncrease');
-        const btnDecrease = document.getElementById('btnDecrease');
-        const btnVoice = document.getElementById('btnVoice');
-        const btnAudioFeedback = document.getElementById('btnAudioFeedback');
-        const btnTap = document.getElementById('btnTap');
-        const micIcon = document.getElementById('micIcon');
-        const voiceText = document.getElementById('voiceText');
-        const installPrompt = document.getElementById('installPrompt');
-        const errorMsg = document.getElementById('errorMsg');
+<div id="hint">使用下方按鈕開始、停止、加快或變慢。開啟手機的 TalkBack 即可聽取各按鈕功能。</div>
 
-        // 顯示錯誤訊息
-        function showError(msg) {
-            errorMsg.textContent = '❌ ' + msg;
-            errorMsg.classList.add('show');
-            setTimeout(() => errorMsg.classList.remove('show'), 5000);
-        }
+<div id="controls">
+  <button class="btn" id="btnSlower" aria-label="變慢，每分鐘減少四拍">− 變慢</button>
+  <button class="btn" id="btnToggle" aria-label="開始播放">▶ 開始播放</button>
+  <button class="btn" id="btnFaster" aria-label="加快，每分鐘增加四拍">＋ 加快</button>
+</div>
 
-        // 初始化 AudioContext（需要用戶互動後才能啟動）
-        function initAudioContext() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
-        }
+<script>
+(function () {
+  "use strict";
 
-        // 播放節拍音效
-        function playBeat() {
-            if (!audioContext) return;
-            
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.frequency.value = beatCount % 4 === 0 ? 1000 : 800;
-            oscillator.type = 'sine';
-            
-            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
-            
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.1);
-            
-            // 震動回饋（手機）
-            if (navigator.vibrate) {
-                navigator.vibrate(beatCount % 4 === 0 ? 100 : 50);
-            }
-            
-            updateBeatIndicator();
-            beatCount++;
-        }
+  // ===== 狀態 =====
+  let bpm = 60;
+  const MIN_BPM = 40, MAX_BPM = 240;
+  let beatsPerBar = 4;
+  let isPlaying = false;
 
-        // 更新節拍指示器
-        function updateBeatIndicator() {
-            const dots = document.querySelectorAll('.beat-dot');
-            dots.forEach((dot, index) => {
-                dot.classList.remove('active');
-                if (index === beatCount % 4) {
-                    dot.classList.add('active');
-                }
-            });
-        }
+  // ===== Web Audio（節拍聲，非報讀） =====
+  let audioCtx = null;
+  let nextNoteTime = 0;
+  let currentBeat = 0;
+  let schedulerTimer = null;
+  const lookahead = 25;
+  const scheduleAhead = 0.12;
 
-        // 開始節拍器
-        function startMetronome() {
-            if (isPlaying) return;
-            
-            initAudioContext();
-            
-            isPlaying = true;
-            beatCount = 0;
-            btnStart.textContent = '⏸ 暫停';
-            
-            playBeat();
-            intervalId = setInterval(playBeat, 60000 / bpm);
-            
-            // 語音回饋
-            announce(`${bpm} BPM`);
-        }
+  const $ = (id) => document.getElementById(id);
+  const elStatus = $("status");
+  const elBpm = $("bpmValue");
+  const elBigBpm = $("bigBpm");
+  const elToggle = $("btnToggle");
+  const elFlash = $("flash");
+  const elDots = Array.from(document.querySelectorAll(".dot"));
+  const elErr = $("err");
 
-        // 停止節拍器
-        function stopMetronome() {
-            if (!isPlaying && intervalId === null) return;
-            
-            isPlaying = false;
-            clearInterval(intervalId);
-            intervalId = null;
-            btnStart.textContent = '▶ 播放';
-            
-            document.querySelectorAll('.beat-dot').forEach(dot => {
-                dot.classList.remove('active');
-            });
-            
-            announce('已停止', true);
-        }
+  function showErr(msg) { elErr.textContent = msg; elErr.style.display = "block"; clearTimeout(elErr._t); elErr._t = setTimeout(() => { elErr.style.display = "none"; }, 6000); }
 
-        // 更新 BPM
-        function updateBPM(newBpm, animate = true) {
-            bpm = Math.max(40, Math.min(208, Math.round(newBpm)));
-            bpmDisplay.textContent = bpm;
-            bpmSlider.value = bpm;
-            
-            if (animate) {
-                bpmDisplay.classList.add('tapped');
-                setTimeout(() => bpmDisplay.classList.remove('tapped'), 100);
-            }
-            
-            if (isPlaying) {
-                clearInterval(intervalId);
-                intervalId = setInterval(playBeat, 60000 / bpm);
-            }
-        }
+  function ensureAudio() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { showErr("此裝置不支援音效，節拍聲可能無法播放"); return; }
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  }
 
-        // Tap Tempo 功能
-        let tapTimes = [];
-        const TAP_TIMEOUT = 2000;
+  // 節拍聲 + 震動（給視障者非視覺回饋，不含語音報讀）
+  function scheduleClick(beatNumber, time) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const isDownbeat = (beatNumber === 0);
+    osc.frequency.value = isDownbeat ? 1000 : 800;
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.exponentialRampToValueAtTime(0.6, time + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.06);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(time); osc.stop(time + 0.07);
 
-        function handleTap() {
-            initAudioContext();
-            
-            const now = Date.now();
-            tapTimes.push(now);
-            
-            // 清除過舊的 tap
-            tapTimes = tapTimes.filter(time => now - time < TAP_TIMEOUT);
-            
-            if (tapTimes.length >= 2) {
-                const intervals = [];
-                for (let i = 1; i < tapTimes.length; i++) {
-                    intervals.push(tapTimes[i] - tapTimes[i-1]);
-                }
-                const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-                const newBpm = Math.round(60000 / avgInterval);
-                
-                if (newBpm >= 40 && newBpm <= 208) {
-                    updateBPM(newBpm);
-                    announce(`${bpm} BPM`, true);
-                }
-            }
-            
-            // 播放輕微音效回饋
-            if (audioContext) {
-                const osc = audioContext.createOscillator();
-                const gain = audioContext.createGain();
-                osc.connect(gain);
-                gain.connect(audioContext.destination);
-                osc.frequency.value = 600;
-                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
-                osc.start(audioContext.currentTime);
-                osc.stop(audioContext.currentTime + 0.05);
-            }
-        }
+    const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
+    if (navigator.vibrate) setTimeout(() => navigator.vibrate(isDownbeat ? 90 : 35), delay);
+    setTimeout(() => flashBeat(isDownbeat), delay);
+  }
 
-        // 語音回饋（視障友善：獨立於語音辨識）
-        let announceTimer = null;
-        function announce(text, immediate = false) {
-            if (!audioFeedbackEnabled && !isListening) return;
+  function flashBeat(isDownbeat) {
+    elFlash.classList.toggle("downbeat", isDownbeat);
+    elFlash.style.opacity = "0.55";
+    setTimeout(() => { elFlash.style.opacity = "0"; }, 60);
+    elDots.forEach((d, i) => d.classList.toggle("active", i === currentBeat % beatsPerBar));
+  }
 
-            // 防堆疊：清除上一個 pending 報讀
-            if (announceTimer) {
-                clearTimeout(announceTimer);
-            }
+  function scheduler() {
+    if (!audioCtx) return;
+    while (nextNoteTime < audioCtx.currentTime + scheduleAhead) {
+      scheduleClick(currentBeat % beatsPerBar, nextNoteTime);
+      nextNoteTime += 60.0 / bpm;
+      currentBeat++;
+    }
+  }
+  function startScheduler() {
+    ensureAudio(); if (!audioCtx) return;
+    currentBeat = 0; nextNoteTime = audioCtx.currentTime + 0.06;
+    schedulerTimer = setInterval(scheduler, lookahead);
+  }
+  function stopScheduler() { clearInterval(schedulerTimer); schedulerTimer = null; elDots.forEach((d) => d.classList.remove("active")); }
 
-            // 防重複：拖滑桿時 debounce 200ms，只報最後一次
-            announceTimer = setTimeout(() => {
-                speak(text, 0.5); // 輕聲量
-            }, immediate ? 0 : 200);
-        }
+  // ===== 狀態更新（TalkBack 會透過 aria-live 自動報讀） =====
+  function updateUI() {
+    elBpm.textContent = bpm;
+    elBigBpm.textContent = bpm;
+    elStatus.textContent = isPlaying ? "播放中" : "已停止";
+    const playing = isPlaying;
+    elToggle.textContent = playing ? "■ 停止播放" : "▶ 開始播放";
+    elToggle.classList.toggle("playing", playing);
+    elToggle.setAttribute("aria-label", playing ? "停止播放" : "開始播放");
+  }
 
-        // 語音合成
-        function speak(text, volume = 0.8) {
-            if ('speechSynthesis' in window) {
-                // 先中斷舊報讀，避免堆疊重複
-                speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'zh-TW';
-                utterance.rate = 1.3;
-                utterance.volume = volume;
-                speechSynthesis.speak(utterance);
-            }
-        }
+  function start() { if (isPlaying) return; isPlaying = true; startScheduler(); updateUI(); }
+  function stop() { if (!isPlaying) return; isPlaying = false; stopScheduler(); updateUI(); }
+  function toggle() { isPlaying ? stop() : start(); }
+  function changeBpm(delta) {
+    bpm = Math.max(MIN_BPM, Math.min(MAX_BPM, bpm + delta));
+    updateUI();
+  }
 
-        // 語音識別
-        let recognition = null;
-        let isListening = false;
+  // ===== 事件 =====
+  $("btnToggle").addEventListener("click", () => { ensureAudio(); toggle(); });
+  $("btnSlower").addEventListener("click", () => { changeBpm(-4); });
+  $("btnFaster").addEventListener("click", () => { changeBpm(4); });
 
-        function initSpeechRecognition() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            
-            if (!SpeechRecognition) {
-                showError('此瀏覽器不支援語音識別，請使用 Chrome');
-                return false;
-            }
-            
-            try {
-                recognition = new SpeechRecognition();
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.lang = 'zh-TW';
-                
-                recognition.onresult = (event) => {
-                    const last = event.results.length - 1;
-                    const transcript = event.results[last][0].transcript.trim();
-                    
-                    voiceText.textContent = `辨識：${transcript}`;
-                    
-                    if (event.results[last].isFinal) {
-                        processVoiceCommand(transcript);
-                    }
-                };
-                
-                recognition.onerror = (event) => {
-                    console.error('語音識別錯誤:', event.error);
-                    let errMsg = event.error;
-                    
-                    if (event.error === 'not-allowed') {
-                        errMsg = '麥克風權限被拒絕，請到 Chrome 設定允許';
-                    } else if (event.error === 'no-speech') {
-                        errMsg = '沒有偵測到語音';
-                    } else if (event.error === 'network') {
-                        errMsg = '網路連線問題';
-                    } else if (event.error === 'aborted') {
-                        errMsg = '語音識別被中斷';
-                    }
-                    
-                    showError(`語音錯誤：${errMsg}`);
-                    voiceText.textContent = errMsg;
-                };
-                
-                recognition.onend = () => {
-                    if (isListening) {
-                        try {
-                            recognition.start();
-                        } catch (e) {
-                            console.log('重啟語音識別失敗:', e);
-                            showError('語音識別重啟失敗，請再次點擊啟用');
-                            isListening = false;
-                            micIcon.classList.remove('active');
-                            btnVoice.textContent = '🎤 啟用語音控制';
-                        }
-                    }
-                };
-                
-                return true;
-            } catch (e) {
-                showError('語音識別初始化失敗：' + e.message);
-                return false;
-            }
-        }
+  // 鍵盤快捷鍵（桌面）
+  document.addEventListener("keydown", (e) => {
+    if (e.target === document.body) {
+      if (e.code === "Space") { e.preventDefault(); ensureAudio(); toggle(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); changeBpm(1); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); changeBpm(-1); }
+    }
+  });
 
-        // 處理語音指令
-        function processVoiceCommand(command) {
-            const cmd = command.toLowerCase();
-            voiceText.textContent = `指令：${command}`;
-            
-            if (cmd.includes('開始') || cmd.includes('播放') || cmd.includes('起')) {
-                startMetronome();
-                return;
-            }
-            
-            if (cmd.includes('停止') || cmd.includes('暫停') || cmd.includes('關掉') || cmd.includes('停')) {
-                stopMetronome();
-                return;
-            }
-            
-            if (cmd.includes('加快') || cmd.includes('變快') || cmd.includes('加速') || cmd.includes('快一點')) {
-                updateBPM(bpm + 10);
-                announce(`${bpm} BPM`, true);
-                return;
-            }
-            
-            if (cmd.includes('變慢') || cmd.includes('減慢') || cmd.includes('降速') || cmd.includes('慢一點')) {
-                updateBPM(bpm - 10);
-                announce(`${bpm} BPM`, true);
-                return;
-            }
-            
-            if (cmd.includes('重置') || cmd.includes('重設') || cmd.includes('恢復') || cmd.includes('預設')) {
-                updateBPM(120);
-                announce('已重置為 120 BPM', true);
-                return;
-            }
-            
-            // 設定特定 BPM
-            const bpmMatch = cmd.match(/(\d+)\s*(拍|bpm|b|拍子)/);
-            if (bpmMatch) {
-                const newBpm = parseInt(bpmMatch[1]);
-                if (newBpm >= 40 && newBpm <= 208) {
-                    updateBPM(newBpm);
-                    announce(`設定為 ${bpm} BPM`, true);
-                } else {
-                    speak('速度需在 40 到 208 之間');
-                }
-                return;
-            }
-            
-            // 純數字
-            const numberMatch = cmd.match(/^(\d+)$/);
-            if (numberMatch) {
-                const newBpm = parseInt(numberMatch[1]);
-                if (newBpm >= 40 && newBpm <= 208) {
-                    updateBPM(newBpm);
-                    announce(`${bpm} BPM`);
-                }
-                return;
-            }
-        }
+  // ===== PWA Service Worker =====
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+  }
 
-        // 切換語音監聽
-        function toggleVoice() {
-            initAudioContext();
-            
-            if (!recognition && !initSpeechRecognition()) {
-                return;
-            }
-            
-            if (isListening) {
-                isListening = false;
-                try {
-                    recognition.stop();
-                } catch (e) {}
-                micIcon.classList.remove('active');
-                btnVoice.textContent = '🎤 啟用語音控制';
-                voiceText.textContent = '語音控制已關閉';
-            } else {
-                try {
-                    recognition.start();
-                    isListening = true;
-                    micIcon.classList.add('active');
-                    btnVoice.textContent = '🎤 關閉語音控制';
-                    voiceText.textContent = '請說出指令...';
-                } catch (e) {
-                    console.error('啟動語音識別失敗:', e);
-                    showError('啟動失敗：' + e.message + '，請確認麥克風權限已允許');
-                    voiceText.textContent = '啟動失敗，請重試';
-                    return;
-                }
-            }
-        }
-
-        // PWA 安裝提示
-        let deferredPrompt;
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            installPrompt.classList.add('show');
-        });
-
-        // iOS PWA 安裝提示
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-
-        if (isIOS && !isInStandaloneMode) {
-            installPrompt.classList.add('show');
-        }
-
-        // 事件監聽器
-        btnStart.addEventListener('click', () => {
-            initAudioContext();
-            if (isPlaying) {
-                stopMetronome();
-            } else {
-                startMetronome();
-            }
-        });
-
-        btnStop.addEventListener('click', stopMetronome);
-
-        btnIncrease.addEventListener('click', () => {
-            updateBPM(bpm + 5);
-            announce(`${bpm} BPM`, true);
-        });
-
-        btnDecrease.addEventListener('click', () => {
-            updateBPM(bpm - 5);
-            announce(`${bpm} BPM`, true);
-        });
-
-        bpmSlider.addEventListener('input', (e) => {
-            updateBPM(parseInt(e.target.value), false);
-            announce(`${bpm} BPM`);
-        });
-
-        btnVoice.addEventListener('click', toggleVoice);
-
-        btnAudioFeedback.addEventListener('click', () => {
-            audioFeedbackEnabled = !audioFeedbackEnabled;
-            btnAudioFeedback.textContent = audioFeedbackEnabled ? '🔊 語音回饋：開' : '🔊 語音回饋：關';
-            btnAudioFeedback.setAttribute('aria-pressed', audioFeedbackEnabled);
-            if (audioFeedbackEnabled) {
-                speak('語音回饋已開啟，現在會唸出速度變化');
-            }
-        });
-
-        btnTap.addEventListener('click', handleTap);
-
-        // 鍵盤快捷鍵（桌面版）
-        document.addEventListener('keydown', (e) => {
-            switch(e.code) {
-                case 'Space':
-                    e.preventDefault();
-                    initAudioContext();
-                    if (isPlaying) {
-                        stopMetronome();
-                    } else {
-                        startMetronome();
-                    }
-                    break;
-                case 'ArrowUp':
-                    e.preventDefault();
-                    updateBPM(bpm + 5);
-                    announce(`${bpm} BPM`, true);
-                    break;
-                case 'ArrowDown':
-                    e.preventDefault();
-                    updateBPM(bpm - 5);
-                    announce(`${bpm} BPM`, true);
-                    break;
-                case 'KeyT':
-                    e.preventDefault();
-                    handleTap();
-                    break;
-            }
-        });
-
-        // 防止 iOS Safari 滾動反彈
-        document.body.addEventListener('touchmove', (e) => {
-            if (e.target === document.body) {
-                e.preventDefault();
-            }
-        }, { passive: false });
-
-        console.log('語音節拍器 PWA 已載入');
-        console.log('瀏覽器:', navigator.userAgent);
-        console.log('支援語音識別:', 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
-    </script>
+  updateUI();
+})();
+</script>
 </body>
 </html>
