@@ -65,6 +65,10 @@
   .btn-wide { width: 100%; }
   #btnVoice { background: #6a1b9a; min-height: 64px; font-size: 20px; }
   #btnVoice.listening { background: #c62828; }
+  .section-label { font-size: 13px; color: #888; padding: 10px 16px 2px; }
+  #soundRow { display: flex; gap: 8px; padding: 4px 16px 10px; flex-wrap: wrap; }
+  .snd { flex: 1 1 0; min-height: 48px; font-size: 16px; border-radius: 12px; border: 2px solid #444; background: #1a1a1a; color: #ddd; font-weight: 600; }
+  .snd.active { border-color: #FFD54A; color: #FFD54A; background: #2a2a18; }
 
   #err { position: fixed; top: 0; left: 0; right: 0; background: #b71c1c; color: #fff; padding: 12px 16px; font-size: 15px; display: none; z-index: 99; }
 </style>
@@ -93,6 +97,13 @@
 <div id="hint" aria-hidden="true">使用下方按鈕開始、停止、加快或變慢。開啟手機的 TalkBack 即可聽取各按鈕功能。</div>
 
   <button class="btn btn-wide" id="btnVoice"><span aria-hidden="true">🎤</span> 語音設定速度</button>
+  <div class="section-label">音效</div>
+  <div id="soundRow" role="group" aria-label="音效選擇">
+    <button class="snd active" data-snd="tick" aria-pressed="true">滴噠</button>
+    <button class="snd" data-snd="beep" aria-pressed="false">嗶聲</button>
+    <button class="snd" data-snd="wood" aria-pressed="false">木聲</button>
+    <button class="snd" data-snd="voice" aria-pressed="false">人聲</button>
+  </div>
 <div id="controls">
   <button class="btn" id="btnSlower"><span aria-hidden="true">−</span> 變慢</button>
   <button class="btn" id="btnFaster"><span aria-hidden="true">＋</span> 加快</button>
@@ -110,6 +121,10 @@
 
   // ===== Web Audio（節拍聲，非報讀） =====
   let audioCtx = null;
+  let masterGain = null;
+  let limiter = null;
+  let soundType = "tick";
+  let voiceZH = null;
   let nextNoteTime = 0;
   let currentBeat = 0;
   let schedulerTimer = null;
@@ -131,6 +146,16 @@
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) { showErr("此裝置不支援音效，節拍聲可能無法播放"); return; }
       audioCtx = new AC();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 1.6;
+      limiter = audioCtx.createDynamicsCompressor();
+      limiter.threshold.value = -1;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 12;
+      limiter.attack.value = 0.002;
+      limiter.release.value = 0.12;
+      masterGain.connect(limiter);
+      limiter.connect(audioCtx.destination);
     }
     if (audioCtx.state === "suspended") audioCtx.resume();
   }
@@ -146,36 +171,70 @@
     return noiseBuf;
   }
 
+  // 單音（音調成分）
+  function tone(time, freq, wave, peak, dur, slide) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = wave;
+    osc.frequency.setValueAtTime(freq, time);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + dur);
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.exponentialRampToValueAtTime(peak, time + 0.001);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    osc.connect(g); g.connect(masterGain);
+    osc.start(time); osc.stop(time + dur + 0.01);
+  }
+  // 噪聲打擊瞬間
+  function noiseBurst(time, freq, peak, dur) {
+    if (!audioCtx) return;
+    const n = audioCtx.createBufferSource();
+    n.buffer = getNoiseBuffer();
+    const f = audioCtx.createBiquadFilter();
+    f.type = "bandpass"; f.frequency.value = freq; f.Q.value = 0.8;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(peak, time);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+    n.connect(f); f.connect(g); g.connect(masterGain);
+    n.start(time); n.stop(time + dur + 0.01);
+  }
+  // 人聲數拍（語音合成，限「人聲」音效）
+  function speakCount(beatNumber) {
+    if (!("speechSynthesis" in window)) return;
+    const u = new SpeechSynthesisUtterance(String(beatNumber + 1));
+    u.lang = "zh-TW";
+    u.rate = 1.4;
+    u.pitch = beatNumber === 0 ? 1.5 : 1.0;
+    u.volume = 1.0;
+    if (voiceZH) u.voice = voiceZH;
+    try {
+      if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  // 依音效類型播放節拍聲
+  function playSound(type, beatNumber, time) {
+    const isDown = (beatNumber === 0);
+    if (type === "voice") {
+      const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
+      setTimeout(() => speakCount(beatNumber), delay);
+      return;
+    }
+    if (type === "beep") {
+      tone(time, isDown ? 1500 : 1000, "square", 0.7, 0.05, false);
+    } else if (type === "wood") {
+      tone(time, isDown ? 540 : 420, "sine", 0.85, 0.06, false);
+      noiseBurst(time, isDown ? 1800 : 1100, 0.18, 0.02);
+    } else { // tick（預設機械滴噠）
+      tone(time, isDown ? 1250 : 830, "triangle", 0.9, 0.045, true);
+      noiseBurst(time, isDown ? 2200 : 1300, 0.35, 0.03);
+    }
+  }
+
   function scheduleClick(beatNumber, time) {
     if (!audioCtx) return;
     const isDownbeat = (beatNumber === 0);
-    const freq = isDownbeat ? 1250 : 830;   // 滴(高) / 噠(低)
-
-    // 音調成分：triangle + 快速下滑，形似機械節拍器 "滴答"
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(freq, time);
-    osc.frequency.exponentialRampToValueAtTime(freq * 0.5, time + 0.025);
-    gain.gain.setValueAtTime(0.0001, time);
-    gain.gain.exponentialRampToValueAtTime(0.7, time + 0.001);
-    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.045);
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.start(time); osc.stop(time + 0.05);
-
-    // 噪聲成分：短促打擊瞬間，強化 "嗒" 的顆粒感
-    const noise = audioCtx.createBufferSource();
-    noise.buffer = getNoiseBuffer();
-    const nf = audioCtx.createBiquadFilter();
-    nf.type = "bandpass";
-    nf.frequency.value = isDownbeat ? 2200 : 1300;
-    nf.Q.value = 0.8;
-    const ng = audioCtx.createGain();
-    ng.gain.setValueAtTime(0.35, time);
-    ng.gain.exponentialRampToValueAtTime(0.0001, time + 0.03);
-    noise.connect(nf); nf.connect(ng); ng.connect(audioCtx.destination);
-    noise.start(time); noise.stop(time + 0.05);
-
+    playSound(soundType, beatNumber, time);
     const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
     if (navigator.vibrate) setTimeout(() => navigator.vibrate(isDownbeat ? 90 : 35), delay);
     setTimeout(() => flashBeat(isDownbeat), delay);
@@ -317,6 +376,15 @@
     if (listening) stopListening(); else startListening();
   });
 
+  // 音效選擇
+  document.querySelectorAll(".snd").forEach((b) => {
+    b.addEventListener("click", () => {
+      soundType = b.dataset.snd;
+      document.querySelectorAll(".snd").forEach((x) => { x.classList.remove("active"); x.setAttribute("aria-pressed", "false"); });
+      b.classList.add("active"); b.setAttribute("aria-pressed", "true");
+    });
+  });
+
   // 鍵盤快捷鍵（桌面）
   document.addEventListener("keydown", (e) => {
     if (e.target === document.body) {
@@ -329,6 +397,18 @@
   // ===== PWA Service Worker =====
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+  }
+
+  // 選用中文語音（人聲數拍）
+  if ("speechSynthesis" in window) {
+    const pickVoice = () => {
+      const vs = window.speechSynthesis.getVoices();
+      voiceZH = vs.find((v) => /zh|tw|中文|台/i.test(v.lang + " " + v.name))
+             || vs.find((v) => v.lang && v.lang.toLowerCase().startsWith("zh"))
+             || null;
+    };
+    pickVoice();
+    window.speechSynthesis.onvoiceschanged = pickVoice;
   }
 
   updateUI();
