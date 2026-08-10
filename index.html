@@ -65,10 +65,10 @@
   .btn-wide { width: 100%; }
   #btnVoice { background: #6a1b9a; min-height: 64px; font-size: 20px; }
   #btnVoice.listening { background: #c62828; }
-  .section-label { font-size: 13px; color: #888; padding: 10px 16px 2px; }
-  #soundRow { display: flex; gap: 8px; padding: 4px 16px 10px; flex-wrap: wrap; }
-  .snd { flex: 1 1 0; min-height: 48px; font-size: 16px; border-radius: 12px; border: 2px solid #444; background: #1a1a1a; color: #ddd; font-weight: 600; }
-  .snd.active { border-color: #FFD54A; color: #FFD54A; background: #2a2a18; }
+  #settings { padding: 8px 16px 10px; display: flex; flex-direction: column; gap: 8px; }
+  .field { display: flex; align-items: center; gap: 10px; }
+  .field label { flex: 0 0 96px; font-size: 15px; color: #ccc; }
+  .field select { flex: 1; min-height: 44px; font-size: 16px; border-radius: 10px; border: 1px solid #444; background: #1a1a1a; color: #fff; padding: 0 10px; }
 
   #err { position: fixed; top: 0; left: 0; right: 0; background: #b71c1c; color: #fff; padding: 12px 16px; font-size: 15px; display: none; z-index: 99; }
 </style>
@@ -97,12 +97,32 @@
 <div id="hint" aria-hidden="true">使用下方按鈕開始、停止、加快或變慢。開啟手機的 TalkBack 即可聽取各按鈕功能。</div>
 
   <button class="btn btn-wide" id="btnVoice"><span aria-hidden="true">🎤</span> 語音設定速度</button>
-  <div class="section-label">音效</div>
-  <div id="soundRow" role="group" aria-label="音效選擇">
-    <button class="snd active" data-snd="tick" aria-pressed="true">滴噠</button>
-    <button class="snd" data-snd="beep" aria-pressed="false">嗶聲</button>
-    <button class="snd" data-snd="wood" aria-pressed="false">木聲</button>
-    <button class="snd" data-snd="voice" aria-pressed="false">人聲</button>
+  <div id="settings">
+    <div class="field">
+      <label for="meterSelect">拍數</label>
+      <select id="meterSelect">
+        <option value="2">2/4 拍</option>
+        <option value="3">3/4 拍</option>
+        <option value="4" selected>4/4 拍</option>
+        <option value="5">5/4 拍</option>
+        <option value="6">6/8 拍</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="soundSelect">音效</label>
+      <select id="soundSelect">
+        <option value="classic" selected>原聲（滴噠）</option>
+        <option value="high">高音</option>
+        <option value="jazz">爵士鼓</option>
+        <option value="voice">人聲數拍</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="cueSelect">提示音在第幾拍</label>
+      <select id="cueSelect">
+        <option value="1" selected>第 1 拍</option>
+      </select>
+    </div>
   </div>
 <div id="controls">
   <button class="btn" id="btnSlower"><span aria-hidden="true">−</span> 變慢</button>
@@ -123,7 +143,8 @@
   let audioCtx = null;
   let masterGain = null;
   let limiter = null;
-  let soundType = "tick";
+  let soundType = "classic";
+  let cueBeat = 1;
   let voiceZH = null;
   let nextNoteTime = 0;
   let currentBeat = 0;
@@ -199,12 +220,12 @@
     n.start(time); n.stop(time + dur + 0.01);
   }
   // 人聲數拍（語音合成，限「人聲」音效）
-  function speakCount(beatNumber) {
+  function speakCount(beatNumber, accent) {
     if (!("speechSynthesis" in window)) return;
     const u = new SpeechSynthesisUtterance(String(beatNumber + 1));
     u.lang = "zh-TW";
     u.rate = 1.4;
-    u.pitch = beatNumber === 0 ? 1.5 : 1.0;
+    u.pitch = accent ? 1.6 : 1.0;
     u.volume = 1.0;
     if (voiceZH) u.voice = voiceZH;
     try {
@@ -212,32 +233,40 @@
       window.speechSynthesis.speak(u);
     } catch (e) {}
   }
-  // 依音效類型播放節拍聲
-  function playSound(type, beatNumber, time) {
-    const isDown = (beatNumber === 0);
+  // 依音效類型播放節拍聲；accent=提示音拍位（重音）
+  function playSound(type, beatNumber, time, accent) {
     if (type === "voice") {
       const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
-      setTimeout(() => speakCount(beatNumber), delay);
+      setTimeout(() => speakCount(beatNumber, accent), delay);
       return;
     }
-    if (type === "beep") {
-      tone(time, isDown ? 1500 : 1000, "square", 0.7, 0.05, false);
-    } else if (type === "wood") {
-      tone(time, isDown ? 540 : 420, "sine", 0.85, 0.06, false);
-      noiseBurst(time, isDown ? 1800 : 1100, 0.18, 0.02);
-    } else { // tick（預設機械滴噠）
-      tone(time, isDown ? 1250 : 830, "triangle", 0.9, 0.045, true);
-      noiseBurst(time, isDown ? 2200 : 1300, 0.35, 0.03);
+    if (type === "high") {
+      // 高音版滴噠
+      tone(time, accent ? 1700 : 1150, "triangle", 0.9, 0.04, accent);
+      noiseBurst(time, accent ? 2600 : 1500, 0.3, 0.025);
+    } else if (type === "jazz") {
+      if (accent) {
+        // 爵士鼓：底鼓（kick）低沉「咚」
+        tone(time, 130, "sine", 1.0, 0.12, true);
+        noiseBurst(time, 1800, 0.25, 0.02);
+      } else {
+        // 邊擊 / 響弦「搭」
+        noiseBurst(time, 2400, 0.4, 0.03);
+        tone(time, 320, "triangle", 0.5, 0.03, false);
+      }
+    } else { // classic（原來設定的聲音：滴噠）
+      tone(time, accent ? 1250 : 830, "triangle", 0.9, 0.045, true);
+      noiseBurst(time, accent ? 2400 : 1300, 0.32, 0.03);
     }
   }
 
   function scheduleClick(beatNumber, time) {
     if (!audioCtx) return;
-    const isDownbeat = (beatNumber === 0);
-    playSound(soundType, beatNumber, time);
+    const isAccent = ((beatNumber % beatsPerBar) + 1) === cueBeat;
+    playSound(soundType, beatNumber, time, isAccent);
     const delay = Math.max(0, (time - audioCtx.currentTime) * 1000);
-    if (navigator.vibrate) setTimeout(() => navigator.vibrate(isDownbeat ? 90 : 35), delay);
-    setTimeout(() => flashBeat(isDownbeat), delay);
+    if (navigator.vibrate) setTimeout(() => navigator.vibrate(isAccent ? 90 : 35), delay);
+    setTimeout(() => flashBeat(isAccent), delay);
   }
 
   function flashBeat(isDownbeat) {
@@ -376,14 +405,26 @@
     if (listening) stopListening(); else startListening();
   });
 
-  // 音效選擇
-  document.querySelectorAll(".snd").forEach((b) => {
-    b.addEventListener("click", () => {
-      soundType = b.dataset.snd;
-      document.querySelectorAll(".snd").forEach((x) => { x.classList.remove("active"); x.setAttribute("aria-pressed", "false"); });
-      b.classList.add("active"); b.setAttribute("aria-pressed", "true");
-    });
-  });
+  // 下拉選單：拍數 / 音效 / 提示音拍位
+  const meterSel = $("meterSelect");
+  const cueSel = $("cueSelect");
+  function setMeter(n) {
+    beatsPerBar = n;
+    const keep = Math.min(cueBeat, n);
+    cueSel.innerHTML = "";
+    for (let i = 1; i <= n; i++) {
+      const o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = "第 " + i + " 拍";
+      cueSel.appendChild(o);
+    }
+    cueBeat = keep;
+    cueSel.value = String(keep);
+  }
+  meterSel.addEventListener("change", () => setMeter(parseInt(meterSel.value, 10)));
+  $("soundSelect").addEventListener("change", (e) => { soundType = e.target.value; });
+  cueSel.addEventListener("change", () => { cueBeat = parseInt(cueSel.value, 10); });
+  setMeter(parseInt(meterSel.value, 10));
 
   // 鍵盤快捷鍵（桌面）
   document.addEventListener("keydown", (e) => {
