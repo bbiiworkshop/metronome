@@ -1,6 +1,6 @@
 {
-  "name": "語音節拍器",
-  "short_name": "語音節拍器",
+  "name": "視障語音節拍器",
+  "short_name": "視障節拍器",
   "description": "專為視障者設計的語音節拍器",
   "start_url": ".",
   "display": "standalone",

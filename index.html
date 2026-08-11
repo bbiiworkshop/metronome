@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>語音節拍器</title>
+<title>視障語音節拍器</title>
 <meta name="theme-color" content="#000000">
 <meta name="description" content="專為視障者設計、搭配 TalkBack 使用的節拍器">
 <link rel="manifest" href="manifest.json">
@@ -111,8 +111,9 @@
     <div class="field">
       <label for="soundSelect">音效</label>
       <select id="soundSelect">
-        <option value="classic" selected>原聲（滴噠）</option>
+        <option value="drums" selected>大鼓＋小鼓</option>
         <option value="high">高音</option>
+        <option value="classic">原聲（滴噠）</option>
               </select>
     </div>
     <div class="field">
@@ -235,19 +236,40 @@
   }
   // 依音效類型播放節拍聲；accent=提示音拍位（重音）
   function playSound(type, beatNumber, time, isAccent, localBeat) {
-    if (type === "voice") {
-      // 移除人工 offset，setTimeout 落後剛好由佇列遞補，朗讀自然接續
-      setTimeout(() => speakCount(localBeat), 0);
-      return;
-    }
-    if (type === "high") {
+    if (type === "drums") {
+      // 大鼓+小鼓（真鼓音頻），第1拍大鼓，其他小鼓
+      const isKick = localBeat === 1;
+      playDrum(time, isKick);
+    } else if (type === "high") {
       // 尖銳高音（方波，無滑音）
       tone(time, isAccent ? 2600 : 1900, "square", 0.85, 0.10, false);
       noiseBurst(time, isAccent ? 3200 : 2200, 0.45, 0.06);
-    } else { // classic（原來設定的聲音：滴噠）
+    } else { // classic 滴噠
       tone(time, isAccent ? 1250 : 830, "triangle", 0.9, 0.15, true);
       noiseBurst(time, isAccent ? 2400 : 1300, 0.45, 0.06);
     }
+  }
+
+  // ===== 真鼓音頻播放（大鼓第1拍，小鼓其他拍） =====
+  let kickBuf = null, snareBuf = null;
+  function loadDrum(url, cb) {
+    fetch(url)
+      .then(r => r.arrayBuffer())
+      .then(buf => audioCtx.decodeAudioData(buf, cb, () => {}))
+      .catch(() => {});
+  }
+  function initDrums() {
+    if (!audioCtx || kickBuf) return;
+    loadDrum("static/kick.mp3", b => kickBuf = b);
+    loadDrum("static/snare.mp3", b => snareBuf = b);
+  }
+  function playDrum(time, isKick) {
+    if (!audioCtx || !kickBuf) return;
+    const src = audioCtx.createBufferSource();
+    src.buffer = isKick ? kickBuf : (snareBuf || kickBuf);
+    src.connect(masterGain);
+    const t0 = Math.max(audioCtx.currentTime, time);
+    src.start(t0);
   }
 
   function scheduleClick(beatNumber, time, localBeat) {
