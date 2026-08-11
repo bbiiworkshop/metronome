@@ -253,10 +253,15 @@
   // ===== 真鼓音頻播放（大鼓第1拍，小鼓其他拍） =====
   let kickBuf = null, snareBuf = null;
   function loadDrum(url, cb) {
-    fetch(url)
-      .then(r => r.arrayBuffer())
-      .then(buf => audioCtx.decodeAudioData(buf, cb, () => {}))
-      .catch(() => {});
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url, true);
+    xhr.responseType = "arraybuffer";
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        audioCtx.decodeAudioData(xhr.response, cb, () => {});
+      }
+    };
+    xhr.send();
   }
   function initDrums() {
     if (!audioCtx || kickBuf) return;
