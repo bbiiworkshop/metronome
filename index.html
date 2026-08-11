@@ -263,18 +263,60 @@
     };
     xhr.send();
   }
+  // 延後 200ms 載入，確保音頻上下文已完全啟動
   function initDrums() {
     if (!audioCtx || kickBuf) return;
-    loadDrum("static/kick.mp3", b => kickBuf = b);
-    loadDrum("static/snare.mp3", b => snareBuf = b);
+    setTimeout(() => {
+      if (!kickBuf) { loadDrum("static/kick.mp3", b => kickBuf = b); }
+      if (!snareBuf) { loadDrum("static/snare.mp3", b => snareBuf = b); }
+    }, 200);
   }
   function playDrum(time, isKick) {
-    if (!audioCtx || !kickBuf) return;
+    if (!audioCtx) { playDrumFallback(time, isKick); return; }
+    // 若緩衝未就緒，改用合成鼓聲（低頻大鼓 / 高頻小鼓）
+    if (!kickBuf) { playDrumFallback(time, isKick); return; }
     const src = audioCtx.createBufferSource();
     src.buffer = isKick ? kickBuf : (snareBuf || kickBuf);
     src.connect(masterGain);
     const t0 = Math.max(audioCtx.currentTime, time);
     src.start(t0);
+  }
+
+  // 後備合成鼓聲（低頻方波=大鼓，高頻+噪音=小鼓）
+  function playDrumFallback(time, isKick) {
+    const t0 = Math.max(audioCtx.currentTime, time);
+    if (isKick) {
+      // 大鼓：低頻方波 + 頻率下滑
+      const osc = audioCtx.createOscillator();
+      osc.type = "square"; osc.frequency.setValueAtTime(120, t0);
+      osc.frequency.exponentialRampToValueAtTime(40, t0 + 0.12);
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.8, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+      osc.connect(g); g.connect(masterGain);
+      osc.start(t0); osc.stop(t0 + 0.18);
+    } else {
+      // 小鼓：高頻方波 + 噪音
+      const osc = audioCtx.createOscillator();
+      osc.type = "square"; osc.frequency.value = 240;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.5, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08);
+      osc.connect(g); g.connect(masterGain);
+      osc.start(t0); osc.stop(t0 + 0.08);
+      // 噪音層
+      const nLen = Math.floor(audioCtx.sampleRate * 0.08);
+      const nBuf = audioCtx.createBuffer(1, nLen, audioCtx.sampleRate);
+      const nd = nBuf.getChannelData(0);
+      for (let i = 0; i < nLen; i++) nd[i] = Math.random() * 2 - 1;
+      const ns = audioCtx.createBufferSource();
+      ns.buffer = nBuf;
+      const ng = audioCtx.createGain();
+      ng.gain.setValueAtTime(0.4, t0);
+      ng.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08);
+      ns.connect(ng); ng.connect(masterGain);
+      ns.start(t0);
+    }
   }
 
   function scheduleClick(beatNumber, time, localBeat) {
